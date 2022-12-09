@@ -181,7 +181,7 @@ class PalaNode(Node):
             # add clock
             if message.epoch not in self.clock_message_set:
                 self.clock_message_set[message.epoch] = set()
-            self.clock_message_set[message.epoch].add((sender.ID, self.ID, message))
+            self.clock_message_set[message.epoch].add((sender.ID, self.ID))
             self.update_clock_message_count(message.epoch)
             if self.clock_message_count[message.epoch] == 1:
                 # increment epoch and reset NextEpoch+

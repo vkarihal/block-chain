@@ -81,7 +81,7 @@ class Simulator:
         else:
             logging.debug(f"[{self.time:.2f}] {sender} --> {recipient} [{arrival_time:.2f}]: {message}")
 
-    def run(self, time_limit: float = 100):  # time_limit = 6000
+    def run(self, time_limit: float = 6000):  # time_limit = 6000
         while self.queue:
             # find earliest event to simulate next
             next_event = self.queue[0]
