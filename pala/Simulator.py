@@ -41,7 +41,7 @@ class Node:
         arrival_time = self.simulator.time + delay
         event = Event(arrival_time, self, message, self, self)
         self.simulator.queue.append(event)
-        logging.debug(f"[{self.simulator.time:.2f}] {self} [{arrival_time:.2f}]: {message}")
+        # logging.debug(f"[{self.simulator.time:.2f}] {self} [{arrival_time:.2f}]: {message}")
 
     # to be overridden by protocol
     def receive(self, message: Message, author: Node):
@@ -81,7 +81,7 @@ class Simulator:
         else:
             logging.debug(f"[{self.time:.2f}] {sender} --> {recipient} [{arrival_time:.2f}]: {message}")
 
-    def run(self, time_limit: float = 6000):  # time_limit = 6000
+    def run(self, time_limit: float = 3000):  # time_limit = 6000
         while self.queue:
             # find earliest event to simulate next
             next_event = self.queue[0]
