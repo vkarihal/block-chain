@@ -4,7 +4,7 @@ from numpy.random import exponential
 
 import logging
 
-AVERAGE_DELAY = 0.5
+AVERAGE_DELAY = 1  # 6
 ORDERED_DELIVERY = True
 IMPLICIT_ECHOING = False
 
@@ -81,7 +81,7 @@ class Simulator:
         else:
             logging.debug(f"[{self.time:.2f}] {sender} --> {recipient} [{arrival_time:.2f}]: {message}")
 
-    def run(self, time_limit: float = 3000):
+    def run(self, time_limit: float = 3000):  # 3000
         while self.queue:
             # find earliest event to simulate next
             next_event = self.queue[0]
@@ -94,6 +94,7 @@ class Simulator:
             sender = next_event.sender
             author = next_event.author
             # terminate if simulation time is up
+            # logging.info(f"SIMULATION_TIME {next_event.time}")
             if next_event.time >= time_limit:
                 return
             # advance simulation time to next event
