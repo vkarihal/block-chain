@@ -11,7 +11,7 @@ from Simulator import *
 DELTA = 1
 SECOND = 6 * DELTA
 MINUTE = 30 * DELTA
-TOTAL_NUMBER_OF_NODES = 5
+TOTAL_NUMBER_OF_NODES = 10
 
 
 class Block:

@@ -4,7 +4,7 @@ from numpy.random import exponential
 
 import logging
 
-AVERAGE_DELAY = 0.5
+AVERAGE_DELAY = 4
 ORDERED_DELIVERY = False
 IMPLICIT_ECHOING = True
 
