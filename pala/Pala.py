@@ -130,7 +130,6 @@ class PalaNode(Node):
                     self.all_messages_received_count_for_finalization = len(self.all_messages_received_list)
 
     def finalize(self, notarized_block: Block):
-        # i = 1
         if len(self.un_notarized_list) == 0:
             self.finalize_logic(notarized_block)
         else:
