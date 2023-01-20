@@ -126,6 +126,8 @@ class PalaNode(Node):
                     blk_set_left = blk_set_left.difference(self.finalized)
                     self.finalized = self.finalized.union(blk_set_left)
                     self.finalized_freshest_block_length = notarized_block.length - 1
+                    self.unique_message_received_count_for_finalization = len(self.unique_message_received_set)
+                    self.all_messages_received_count_for_finalization = len(self.all_messages_received_list)
 
     def finalize(self, notarized_block: Block):
         # i = 1
@@ -197,6 +199,8 @@ class PalaNode(Node):
                     self.timeout(SECOND, InitiateLeader())
 
     def receive(self, message: Message, sender: Node):
+        self.unique_message_received_set.add(message)
+        self.all_messages_received_list.append(message)
         message_type = type(message)
         if message_type == NextEpoch:
             # self.me
@@ -264,8 +268,11 @@ if __name__ == "__main__":
         simulator.nodes.append(PalaNode(simulator, i))
     simulator.run()
     for i in range(TOTAL_NUMBER_OF_NODES):
+        node = simulator.nodes[i]
         logging.info(f" node {i}, num of blocks finalized:  {len(simulator.nodes[i].finalized)}, "
-                     f"num of blocks notarized:  {len(simulator.nodes[i].notarized)}")
+                     f"num of blocks notarized:  {len(simulator.nodes[i].notarized)}, "
+                     f"unique message count: {node.unique_message_received_count_for_finalization}, "
+                     f"total message count: {node.all_messages_received_count_for_finalization}")
     now2 = datetime.now()
     ct2 = now2.strftime("%H:%M:%S")
     logging.info(f"start_time: {ct2}")

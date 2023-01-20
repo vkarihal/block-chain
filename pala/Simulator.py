@@ -109,7 +109,9 @@ class Simulator:
                         if node != recipient and node != sender:
                             # echo from recipient with original author
                             self.communicate(node, message, recipient, author)
+                '''            
                 else:
                     continue  # skip event handling
+                '''
             # let node handle event
             recipient.receive(message, author)
