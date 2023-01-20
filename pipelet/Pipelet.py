@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from datetime import datetime
 import logging
 
 formatter = "%(message)s"
@@ -10,20 +10,9 @@ from Simulator import *
 DELTA = 1
 SECOND = 6 * DELTA
 MINUTE = 30 * DELTA
-# LEADER_ID = -1
-# keeps track of sequence number in a epoch
-# seq = -1
-# keeps track of current epoch's leader
 EPOCH_LEADER = {}
 # EPOCH_TIMER = 0
-TOTAL_NUMBER_OF_NODES = 5
-
-
-# PROPOSED_BLOCK_RECEIVED = set()
-# un_notarized_block = {}
-
-
-# NODE_CURRENT_EPOCH = {}
+TOTAL_NUMBER_OF_NODES = 10
 
 
 class Block:
@@ -89,16 +78,18 @@ class Sync(Message):
 class PipeletNode(Node):
     def __init__(self, simulator: Simulator, ID: int):
         super().__init__(simulator, ID)
+        self.all_messages_received_count_for_finalization = 0
+        self.all_messages_received_set = set()
+
         self.seq = -1
         self.EPOCH_TIMER = -1
         self.notarized = set([GENESIS])
+        self.finalized = set()
         self.votes = {}
         self.hasVoted = set()
-        # self.initialize_vote_set()
         self.epoch = 0
         self.longest_chain_set = set([GENESIS])
         self.sync_block_set = set([GENESIS])
-        # test = set()
         self.clock_message_count = {self.epoch + 1: 1}
         self.clock_message_set = {self.epoch + 1: set()}
         # to initiate the protocol Clock Message for next epoch added to event queue
@@ -114,10 +105,6 @@ class PipeletNode(Node):
             self.clock_message_count[epoch] = 1
 
     def is_leader(self, epoch: int):
-        # check if the node is the leader of an epoch
-
-        # rand_hash = hash(str(epoch))
-        # return self.ID == rand_hash % len(self.simulator.nodes)
         return self.ID == epoch % len(self.simulator.nodes)
 
     def longest_notarized(self) -> Block:
@@ -157,64 +144,33 @@ class PipeletNode(Node):
                     event.message) == NextEpoch:
                 self.simulator.queue.remove(event)
                 self.timeout(MINUTE, NextEpoch())
-                logging.info(f"func- reset NextEpoch for node {self.ID}")
+                # logging.info(f"func- reset NextEpoch for node {self.ID}")
                 break
+
+    def finalize(self, notarized_block: Block):
+        if notarized_block.length >= 3:
+            blk_2 = notarized_block.parent
+            blk_1 = blk_2.parent
+            if blk_2 in self.notarized and blk_1 in self.notarized:
+                blk_set_left = self.notarized.difference(set([notarized_block]))
+                blk_set_left = blk_set_left.difference(self.finalized)
+                if len(blk_set_left) > 0:
+                    self.finalized = self.finalized.union(blk_set_left)
+                    self.all_messages_received_count_for_finalization = len(self.all_messages_received_set)
 
     def count_vote(self, block: Block):
         # global un_notarized_block
         condition_1 = len(self.votes[block]) >= 2 / 3 * len(self.simulator.nodes)
         condition_2 = block not in self.notarized
-        # at times, it can happen that a node receives the votes required for notarization
-        # but has not yet received the block
-        # so only notarize when it has received the block
-        # condition_3 = (self, block) in PROPOSED_BLOCK_RECEIVED
-        # future work - i think condition_4 will go away for pipelet - but it does not create any harm right now
-        condition_4 = block.parent not in self.notarized
         if condition_1 and condition_2:
             self.notarized.add(block)
-            # this should go away for pipelet
-            # self.remove_blocks(block)
-            logging.info(f"{self} notarized {block}, self-epoch : {self.epoch}, block-epoch: {block.epoch}")
+            self.finalize(block)
+            # logging.info(f"{self} notarized {block}, self-epoch : {self.epoch}, block-epoch: {block.epoch}")
             if self.epoch == block.epoch:
                 # reset Nextepoch() upon block notarization
                 self.reset_next_epoch()
-                '''
-                for event in self.simulator.queue:
-                    # reset Nextepoch() upon block notarization
-                    self.reset_next_epoch()
-                '''
-                # if you have multiple nextepoch for the same epoch
-                # self.timeout(MINUTE, NextEpoch())
-                # logging.info(f"reset NextEpoch")
-                # if EPOCH_LEADER[self.epoch].ID == self.ID and EPOCH_TIMER == 1:
                 if self.is_leader(self.epoch) and self.EPOCH_TIMER == 1:
                     self.timeout(0, InitiateLeader())
-            '''
-            # future work - i think this entire condition_4 will go away for Pipelet. right now causes no harm
-            if condition_4:
-                # when parent block is un notarized
-                # a un-notarized block should not get added to finalized chain
-                if self not in un_notarized_block:
-                    un_notarized_block[self] = [block.parent]
-                else:
-                    if block.parent not in un_notarized_block[self]:
-                        un_notarized_block[self].append(block.parent)
-            '''
-
-    '''
-    def count_vote(self, block, sender):
-        if block not in self.votes:
-            self.votes[block] = set()
-        self.votes[block].add(sender)
-        if len(self.votes[block]) >= 2 / 3 * len(self.simulator.nodes) and block not in self.notarized:
-            self.notarized.add(block)
-            logging.info(f"{self} notarized {block}, self-epoch : {self.epoch}, block-epoch: {block.epoch}")
-            # current_epoch = list(EPOCH_LEADER)[-1]
-            if self.epoch == block.epoch:  # current_epoch:
-                self.reset_next_epoch()
-                if EPOCH_LEADER[self.epoch].ID == self.ID and EPOCH_TIMER == 1:
-                    self.timeout(0, InitiateLeader())
-    '''
 
     def clock_logic(self, message: Clock, sender: Node):
         longest_notarized_block_length = self.longest_notarized().length
@@ -243,14 +199,9 @@ class PipeletNode(Node):
                     self.timeout(MINUTE, NextEpoch())
                 else:
                     self.reset_next_epoch()
-                # self.timeout(MINUTE, NextEpoch())
-                # self.reset_next_epoch()
-                logging.info(f"{self} moves to {self.epoch}")
+                # logging.info(f"{self} moves to {self.epoch}")
                 self.broadcast(message)
-                '''  
-                if self.ID != sender.ID and message not in self.messages_seen:
-                    self.broadcast(message)
-                '''
+
                 if self.is_leader(self.epoch):
                     self.seq = 1
                     self.EPOCH_TIMER = 0
@@ -259,9 +210,8 @@ class PipeletNode(Node):
 
     def receive(self, message: Message, sender: Node):
         global EPOCH_LEADER
-        # global seq
-        # global EPOCH_TIMER
         # logging.info(f" Event triggered - recipient: Node{self}, sender: Node{sender}, message: {message}")
+        self.all_messages_received_set.add(message)
         message_type = type(message)
         if message_type == NextEpoch:
             clock_message = Clock(self.epoch + 1)
@@ -272,36 +222,10 @@ class PipeletNode(Node):
             logging.info(f"reset NextEpoch for node {self.ID}")
             # self.reset_next_epoch()
         elif message_type == Sync:
-            # go away_debug
-            '''
-            n_p = []
-            for d_b in self.notarized:
-                n_p.append(f"{d_b}")
-            logging.info(f"prev_notarized for {self}: {n_p}")
-            '''
-
             previous_longest_notarized_block = self.longest_notarized()
             # will go away just for debugging
             debug_diff_blocks = message.chains.difference(self.notarized)
-
-            '''
-            if len(debug_diff_blocks) > 0:
-                kl = {}
-                try:
-                    er = kl[10]
-                except KeyError:
-                    kl[1] = 'hi'
-            '''
-
             self.notarized = self.notarized.union(message.chains)
-            '''
-            # debug purpose
-            n_l = []
-            for d_n in self.notarized:
-                n_l.append(f"{d_n}")
-            logging.info(f"new_notarized for {self}: {n_l}")
-            '''
-
             for key in message.vote_dict:
                 if key in self.votes:
                     self.votes[key] = self.votes[key].union(message.vote_dict[key])
@@ -309,20 +233,25 @@ class PipeletNode(Node):
                     self.votes[key] = message.vote_dict[key].union()
             new_longest_notarized_block = self.longest_notarized()
             # debug purpose
-
+            '''
             debug_diff_blocks_list = []
             for debug_item in debug_diff_blocks:
                 debug_diff_blocks_list.append(f"{debug_item}")
-            '''
+            
             logging.info(f"{self} in SYNC section: {debug_list}, after SYNC longest blk: {new_longest_notarized_block}"
                          f" at length: {new_longest_notarized_block.length}, before SYNC longest blk: "
                          f"{previous_longest_notarized_block} at length {previous_longest_notarized_block.length}")
             '''
             if new_longest_notarized_block.length > previous_longest_notarized_block.length:
+                '''
                 # debug purpose
                 logging.info(
                     f"{self} SYNC notarized {debug_diff_blocks_list}, self-epoch : {self.epoch} ")
+                '''
+                for block in debug_diff_blocks:
+                    self.finalize(block)
                 self.reset_next_epoch()
+
         elif message_type == Clock:
             self.clock_logic(message, sender)
         elif message_type == InitiateLeader and self.is_leader(self.epoch):
@@ -336,13 +265,6 @@ class PipeletNode(Node):
             if block.parent is GENESIS:
                 for node in self.simulator.nodes:
                     vote_count_for_parent_of_proposed_block.add(node)
-                # vote_count_for_parent_of_proposed_block = TOTAL_NUMBER_OF_NODES
-                '''
-                if GENESIS not in self.votes:
-                    self.votes[GENESIS] = set()
-                for node in self.simulator.nodes:
-                    self.votes[GENESIS].add(node)
-                '''
             else:
                 vote_count_for_parent_of_proposed_block = self.votes[block.parent].union()
 
@@ -351,59 +273,29 @@ class PipeletNode(Node):
             self.add_votes(message_vote.block, self)
             self.count_vote(message_vote.block)
             self.broadcast(message)
-
-            # self.send(self, message_vote)
-            # self.broadcast(message_vote)
+            '''
             logging.info(
                 f"Epoch {self.epoch}: {self} is leader and broadcasts block: {block} block proposal (length: "
                 f"{block.length})")
             '''
-            try:
-                if self.ID == EPOCH_LEADER[self.epoch].ID:
-                    if EPOCH_TIMER == 0:
-                        EPOCH_TIMER = 1
-                    block = Block(self.longest_notarized(), self.epoch, seq)
-                    seq += 1
-                    # vote_count_for_parent_of_proposed_block = len(self.votes[block.parent])
-
-                    vote_count_for_parent_of_proposed_block = set()
-                    if block.parent is GENESIS:
-                        for node in self.simulator.nodes:
-                            vote_count_for_parent_of_proposed_block.add(node)
-                    else:
-                        vote_count_for_parent_of_proposed_block = self.votes[block.parent].union()
-
-                    message = Proposal(block, vote_count_for_parent_of_proposed_block)
-                    self.broadcast(message)
-                    message_vote = Vote(block)
-                    self.send(self, message_vote)
-                    # self.broadcast(message_vote)
-                    logging.info(
-                        f"Epoch {self.epoch}: {self} is leader and broadcasts block: {block} block proposal (length: "
-                        f"{block.length})")
-            except KeyError:
-                # at times a leader of previous epoch gets a block notarized. hence it will lead previous epoch leader
-                # to propose when it has already moved to a later epoch which has a different leader but the leader of
-                # the later epoch is yet to enter the epoch, hence it raises key error
-                logging.info(f" Key error caught: - recipient: {self}, sender: {sender}, message: {message}, key "
-                             f"missing: {self.epoch}")
-            '''
-
         elif message_type == Proposal:
             proposed_block = message.block
-            logging.info(f"{self} received proposed block {proposed_block}")
+            # logging.info(f"{self} received proposed block {proposed_block}")
             self.votes[proposed_block.parent] = message.vote_count.union()
             # last block of the longest notarized chain
             # previous_longest_block = self.longest_notarized()
             # check logic again- written in half sleep
             if len(self.votes[proposed_block.parent]) >= 2 / 3 * len(self.simulator.nodes):
                 previous_longest_block = self.longest_notarized()
+                '''
                 # just for debug, it will go away later
                 if proposed_block.parent not in self.notarized:
                     logging.info(
                         f"{self} notarized {proposed_block.parent}, self-epoch : {self.epoch}, block-epoch: "
                         f"{proposed_block.parent.epoch}")
+                '''
                 self.notarized.add(proposed_block.parent)
+                self.finalize(proposed_block.parent)
                 current_longest_block = self.longest_notarized()
                 genesis_block_test = current_longest_block == previous_longest_block == GENESIS
                 if (current_longest_block.length > previous_longest_block.length) or genesis_block_test:
@@ -421,17 +313,32 @@ class PipeletNode(Node):
                     self.hasVoted.add(proposed_block)
                     # i do not think we need to count proposer votes for proposer block notarization in here, they will
                     # be done later automatically when Vote event happens self.count_vote(proposed_block, self)
-                    logging.info(f"{self} votes on {proposed_block}")
+                    # logging.info(f"{self} votes on {proposed_block}")
                 else:
-                    logging.info(f"{self} rejects {proposed_block}")
+                    oo = 1
+                    # logging.info(f"{self} rejects {proposed_block}")
         elif message_type == Vote:
-            logging.info(f"{self} received Vote({message.block}) from {sender}")
+            # logging.info(f"{self} received Vote({message.block}) from {sender}")
             self.add_votes(message.block, sender)
             self.count_vote(message.block)
 
 
 if __name__ == "__main__":
+
+    now1 = datetime.now()
+    ct1 = now1.strftime("%H:%M:%S")
+    logging.info(f"start_time: {ct1}")
+
     simulator = Simulator()
     for i in range(TOTAL_NUMBER_OF_NODES):
         simulator.nodes.append(PipeletNode(simulator, i))
     simulator.run()
+
+    for i in range(TOTAL_NUMBER_OF_NODES):
+        node = simulator.nodes[i]
+        logging.info(f" node {i}, num of blocks finalized:  {len(simulator.nodes[i].finalized)}, "
+                     f"num of blocks notarized:  {len(simulator.nodes[i].notarized)}, "
+                     f"unique message count: {node.all_messages_received_count_for_finalization}")
+    now2 = datetime.now()
+    ct2 = now2.strftime("%H:%M:%S")
+    logging.info(f"end_time: {ct2}")

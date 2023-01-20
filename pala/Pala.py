@@ -73,7 +73,6 @@ class PalaNode(Node):
 
         self.seq = -1
         self.EPOCH_TIMER = -1
-        self.finalized_freshest_block_length = 0
         self.last_un_notarized_block_length = 0
         self.notarized = set([GENESIS])
         self.finalized = set()
@@ -118,14 +117,13 @@ class PalaNode(Node):
 
     def finalize_logic(self, notarized_block: Block):
         if notarized_block.length >= 3:
-            if (notarized_block.length - 1) > self.finalized_freshest_block_length:
-                blk_2 = notarized_block.parent
-                blk_1 = blk_2.parent
-                if blk_2 in self.notarized and blk_1 in self.notarized:
-                    blk_set_left = self.notarized.difference(set([notarized_block]))
-                    blk_set_left = blk_set_left.difference(self.finalized)
+            blk_2 = notarized_block.parent
+            blk_1 = blk_2.parent
+            if blk_2 in self.notarized and blk_1 in self.notarized:
+                blk_set_left = self.notarized.difference(set([notarized_block]))
+                blk_set_left = blk_set_left.difference(self.finalized)
+                if len(blk_set_left) > 0:
                     self.finalized = self.finalized.union(blk_set_left)
-                    self.finalized_freshest_block_length = notarized_block.length - 1
                     self.unique_message_received_count_for_finalization = len(self.unique_message_received_set)
                     self.all_messages_received_count_for_finalization = len(self.all_messages_received_list)
 
