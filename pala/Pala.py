@@ -275,4 +275,4 @@ if __name__ == "__main__":
                      f"total message count: {node.all_messages_received_count_for_finalization}")
     now2 = datetime.now()
     ct2 = now2.strftime("%H:%M:%S")
-    logging.info(f"start_time: {ct2}")
+    logging.info(f"end_time: {ct2}")
