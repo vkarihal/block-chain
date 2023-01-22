@@ -81,7 +81,7 @@ class Simulator:
         else:
             logging.debug(f"[{self.time:.2f}] {sender} --> {recipient} [{arrival_time:.2f}]: {message}")
 
-    def run(self, time_limit: float = 10):
+    def run(self, time_limit: float = 3000):
         while self.queue:
             # find earliest event to simulate next
             next_event = self.queue[0]
@@ -107,7 +107,9 @@ class Simulator:
                         if node != recipient and node != sender:
                             # echo from recipient with original author
                             self.communicate(node, message, recipient, author)
+                '''
                 else:
                     continue  # skip event handling
+                '''
             # let node handle event
             recipient.receive(message, author)
