@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import argparse
 from datetime import datetime
 import logging
 
@@ -8,14 +10,14 @@ logging.basicConfig(encoding='utf-8', level=logging.INFO, format=formatter)
 from Simulator import *
 
 EPOCH_LENGTH = 1
-TOTAL_NUMBER_OF_NODES = 20
+TOTAL_NUMBER_OF_NODES = 10
 
 
 class Block:
     def __init__(self, parent: Block, epoch: int):
         self.parent = parent
         self.epoch = epoch
-        if parent == None:  # genesis
+        if parent is None:  # genesis
             self.length = 0
         else:
             self.length = parent.length + 1
@@ -195,7 +197,21 @@ class StreamletNode(Node):
             self.count_vote(message.block)
 
 
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--nodes", type=int, help="Total number of nodes", default=3)  # 5
+    parser.add_argument("--timer", type=int, help="Maximum number of iterations", default=5)  # 5000
+    parser.add_argument("--offline_nodes", type=int, help="No of offline nodes", default=0)
+    parser.add_argument("--delay", type=int, help="average_delay", default=0.1)
+    args = parser.parse_args()
+    return args
+
+
 if __name__ == "__main__":
+    '''
+    x = get_args()
+    print(x.nodes, x.timer)
+    '''
 
     now1 = datetime.now()
     ct1 = now1.strftime("%H:%M:%S")
@@ -218,3 +234,4 @@ if __name__ == "__main__":
     now2 = datetime.now()
     ct2 = now2.strftime("%H:%M:%S")
     logging.info(f"end_time: {ct2}")
+
