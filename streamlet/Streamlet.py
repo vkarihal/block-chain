@@ -11,6 +11,7 @@ from Simulator import *
 
 EPOCH_LENGTH = 1
 TOTAL_NUMBER_OF_NODES = 10
+OFFLINE_NODES = 3
 
 
 class Block:
@@ -47,13 +48,15 @@ class NextEpoch(Message):
 
 
 class StreamletNode(Node):
-    def __init__(self, simulator: Simulator, ID: int):
+    def __init__(self, simulator: Simulator, ID: int, active: bool):
         super().__init__(simulator, ID)
 
         self.unique_message_received_count_for_finalization = 0
         self.all_messages_received_count_for_finalization = 0
         self.unique_message_received_set = set()
         self.all_messages_received_list = []
+        self.messages_send = set()
+        self.all_messages_send = []
 
         self.last_un_notarized_block_length = 0
         self.finalized = set()
@@ -64,7 +67,9 @@ class StreamletNode(Node):
         self.notarized = set([GENESIS])
         self.votes = {}
         self.epoch = 0
-        self.timeout(EPOCH_LENGTH, NextEpoch())
+        # self.timeout(EPOCH_LENGTH, NextEpoch())
+        if active:
+            self.timeout(EPOCH_LENGTH, NextEpoch())
 
     def is_leader(self, epoch: int):
         # check if the node is the leader of an epoch
@@ -148,10 +153,13 @@ class StreamletNode(Node):
     def receive(self, message: Message, sender: Node):
         self.unique_message_received_set.add(message)
         self.all_messages_received_list.append(message)
+        self.messages_send.add(message)
+        sender.all_messages_send.append(message)
         message_type = type(message)
         if message_type == NextEpoch:
             self.epoch += 1
             self.timeout(EPOCH_LENGTH, NextEpoch())
+            # logging.info(f"{self} moves to {self.epoch}")
             # if proposer
             if self.is_leader(self.epoch):
                 # extend a longest notarized chain
@@ -161,9 +169,11 @@ class StreamletNode(Node):
                 self.add_votes(block, self)
                 self.count_vote(block)
                 self.broadcast(message)
+                message_vote = Vote(block)
+                self.broadcast(message_vote)
                 '''
                 logging.info(
-                    f"Epoch {self.epoch}: {self} is leader and broadcasts block proposal (length = {block.length})")
+                    f"Epoch {self.epoch}: {self} is leader and broadcasts block proposal {block} at (length = {block.length})")
                 '''
         elif message_type == Proposal:
             proposed_block = message.block
@@ -172,25 +182,37 @@ class StreamletNode(Node):
             self.PROPOSED_BLOCK_RECEIVED.add(proposed_block)
             condition_1 = proposed_block.epoch == self.epoch
             condition_2 = sender.is_leader(self.epoch)
-            condition_3 = proposed_block not in self.hasVoted
+            condition_3 = proposed_block.epoch not in self.hasVoted
             condition_4 = proposed_block.length == longest_block.length + 1
             condition_5 = proposed_block.parent in self.notarized
             condition_6 = 0 == len(self.un_notarized_list)
-            '''
-            if proposed_block.epoch == self.epoch and sender.is_leader(
-                    self.epoch) and proposed_block.length == longest_block.length + 1 and proposed_block.parent in \
-                    self.notarized:
-            '''
             if condition_1 and condition_2 and condition_3 and condition_4 and condition_5 and condition_6:
                 message = Vote(proposed_block)
                 self.add_votes(proposed_block, self)
                 self.count_vote(proposed_block)
                 self.broadcast(message)
-                self.hasVoted.add(proposed_block)
+                self.hasVoted.add(proposed_block.epoch)
                 # logging.info(f"{self} votes on {proposed_block}")
             else:
-                oo = 1
-                # logging.info(f"{self} rejects {proposed_block}")
+                '''
+                #debug purpose
+                oo = set()
+                if condition_1 is False:
+                    oo.add("proposed block epoch does not matches node's epoch, ")
+                if condition_2 is False:
+                    oo.add("sender is not the leader of the epoch, ")
+                if condition_3 is False:
+                    str_id = "node" + str(self.ID) + "has already voted for the epoch, "
+                    oo.add(str_id)
+                if condition_4 is False:
+                    oo.add("proposed block length is not 1 greater than longest notarized block length, ")
+                if condition_5 is False:
+                    oo.add("proposed block parent not in notarized set, ")
+                if condition_6 is False:
+                    oo.add("there exist a un notarized block, ")
+                logging.info(f"{self} rejects {proposed_block} for reason: {oo}")
+                '''
+                pass
         elif message_type == Vote:
             # logging.info(f"{self} received Vote({message.block}) from {sender}")
             self.add_votes(message.block, sender)
@@ -219,7 +241,17 @@ if __name__ == "__main__":
 
     simulator = Simulator()
     for i in range(TOTAL_NUMBER_OF_NODES):
-        simulator.nodes.append(StreamletNode(simulator, i))
+        if i < TOTAL_NUMBER_OF_NODES - OFFLINE_NODES:
+            simulator.nodes.append(StreamletNode(simulator, i, True))
+        else:
+            simulator.nodes.append(StreamletNode(simulator, i, False))
+            simulator.offline_nodes.add(simulator.nodes[i])
+            # simulator.queue.remove()
+
+    if len(simulator.offline_nodes) >= (2 / 3) * TOTAL_NUMBER_OF_NODES:
+        logging.info(f"exit: number of offline nodes greater then two-thirds total nodes")
+        exit()
+
     simulator.run()
 
     for i in range(TOTAL_NUMBER_OF_NODES):
@@ -229,9 +261,18 @@ if __name__ == "__main__":
         logging.info(f" node {i}, num of blocks finalized:  {len(simulator.nodes[i].finalized)}, "
                      f"num of blocks notarized:  {len(simulator.nodes[i].notarized)}, "
                      f"unique message count: {node.unique_message_received_count_for_finalization}, "
-                     f"total message count: {node.all_messages_received_count_for_finalization}")
+                     f"total message count: {node.all_messages_received_count_for_finalization},"
+                     f" total message send: {len(node.all_messages_send)}")
+
+    # f"total message send: {node.all_messages_send}",
+    # f"unique message send: {node.messages_send}")
+
+    '''
+    for mess in simulator.nodes[4].all_messages_send:
+        logging.info(f"node 5 message: {mess}")
+        pass
+    '''
 
     now2 = datetime.now()
     ct2 = now2.strftime("%H:%M:%S")
     logging.info(f"end_time: {ct2}")
-
