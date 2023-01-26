@@ -10,8 +10,8 @@ logging.basicConfig(encoding='utf-8', level=logging.INFO, format=formatter)
 from Simulator import *
 
 EPOCH_LENGTH = 1
-TOTAL_NUMBER_OF_NODES = 10
-OFFLINE_NODES = 3
+TOTAL_NUMBER_OF_NODES = 5
+OFFLINE_NODES = 1
 
 
 class Block:
