@@ -11,7 +11,8 @@ from Simulator import *
 DELTA = 1
 SECOND = 6 * DELTA
 MINUTE = 30 * DELTA
-TOTAL_NUMBER_OF_NODES = 10
+TOTAL_NUMBER_OF_NODES = 5
+OFFLINE_NODES = 0
 
 
 class Block:
@@ -64,12 +65,14 @@ class Clock(Message):
 
 
 class PalaNode(Node):
-    def __init__(self, simulator: Simulator, ID: int):
+    def __init__(self, simulator: Simulator, ID: int, active: bool):
         super().__init__(simulator, ID)
         self.unique_message_received_count_for_finalization = 0
         self.all_messages_received_count_for_finalization = 0
         self.unique_message_received_set = set()
         self.all_messages_received_list = []
+        self.messages_send = set()
+        self.all_messages_send = []
 
         self.seq = -1
         self.EPOCH_TIMER = -1
@@ -84,15 +87,14 @@ class PalaNode(Node):
         self.clock_message_count = {self.epoch + 1: 1}
         self.clock_message_set = {self.epoch + 1: set()}
         # to initiate the protocol Clock Message for next epoch added to event queue
-        self.timeout(MINUTE, Clock(self.epoch + 1))
+        if active:
+            self.timeout(MINUTE, Clock(self.epoch + 1))
 
     def update_clock_message_count(self, epoch: int):
         if len(self.clock_message_set[epoch]) >= 2 / 3 * len(self.simulator.nodes):
             self.clock_message_count[epoch] = 1
 
     def is_leader(self, epoch: int):
-        rand_hash = hash(str(epoch))
-        # return self.ID == rand_hash % len(self.simulator.nodes)
         return self.ID == epoch % len(self.simulator.nodes)
 
     def freshest_notarized(self) -> Block:
@@ -184,6 +186,7 @@ class PalaNode(Node):
             if message.epoch not in self.clock_message_set:
                 self.clock_message_set[message.epoch] = set()
             self.clock_message_set[message.epoch].add((sender.ID, self.ID))
+            # logging.info(f"{self} in epoch {self.epoch} rx. clock from {sender} for {message.epoch}")
             self.update_clock_message_count(message.epoch)
             if self.clock_message_count[message.epoch] == 1:
                 # increment epoch and reset NextEpoch+
@@ -198,6 +201,8 @@ class PalaNode(Node):
     def receive(self, message: Message, sender: Node):
         self.unique_message_received_set.add(message)
         self.all_messages_received_list.append(message)
+        self.messages_send.add(message)
+        sender.all_messages_send.append(message)
         message_type = type(message)
         if message_type == NextEpoch:
             # self.me
@@ -221,8 +226,10 @@ class PalaNode(Node):
             self.add_votes(message_vote.block, self)
             self.count_vote(message_vote.block)
             self.broadcast(message_vote)
-            # logging.info(
-            # f"Epoch {self.epoch}: {self} is leader and broadcasts block proposal (length = {block.length})")
+            '''
+            logging.info(
+             f"Epoch {self.epoch}: {self} is leader and broadcasts block {block} proposal (length = {block.length})")
+             '''
         elif message_type == Proposal:
             proposed_block = message.block
             # last block of the freshest notarized chain
@@ -247,7 +254,7 @@ class PalaNode(Node):
                 self.hasVoted.add(proposed_block)
                 # logging.info(f"{self} votes on {proposed_block}")
             else:
-                oo = 1
+                pass
                 # logging.info(f"{self} rejects {proposed_block}")
         elif message_type == Vote:
             # logging.info(f"{self} received Vote({message.block}) from {sender}")
@@ -261,15 +268,31 @@ if __name__ == "__main__":
     logging.info(f"start_time: {ct1}")
 
     simulator = Simulator()
+    '''
     for i in range(TOTAL_NUMBER_OF_NODES):
         simulator.nodes.append(PalaNode(simulator, i))
+    '''
+
+    for i in range(TOTAL_NUMBER_OF_NODES):
+        if i < TOTAL_NUMBER_OF_NODES - OFFLINE_NODES:
+            simulator.nodes.append(PalaNode(simulator, i, True))
+        else:
+            simulator.nodes.append(PalaNode(simulator, i, False))
+            simulator.offline_nodes.add(simulator.nodes[i])
+            # simulator.queue.remove()
+
+    if len(simulator.offline_nodes) >= (2 / 3) * TOTAL_NUMBER_OF_NODES:
+        logging.info(f"exit: number of offline nodes greater then two-thirds total nodes")
+        exit()
     simulator.run()
     for i in range(TOTAL_NUMBER_OF_NODES):
         node = simulator.nodes[i]
         logging.info(f" node {i}, num of blocks finalized:  {len(simulator.nodes[i].finalized)}, "
                      f"num of blocks notarized:  {len(simulator.nodes[i].notarized)}, "
                      f"unique message count: {node.unique_message_received_count_for_finalization}, "
-                     f"total message count: {node.all_messages_received_count_for_finalization}")
+                     f"total message count: {node.all_messages_received_count_for_finalization},"
+                     f" total message send: {len(node.all_messages_send)}")
+
     now2 = datetime.now()
     ct2 = now2.strftime("%H:%M:%S")
     logging.info(f"end_time: {ct2}")
