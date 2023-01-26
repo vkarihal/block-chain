@@ -4,7 +4,7 @@ from numpy.random import exponential
 
 import logging
 
-AVERAGE_DELAY = 4  # 6
+AVERAGE_DELAY = 0.5  # 6
 ORDERED_DELIVERY = True
 IMPLICIT_ECHOING = False
 
@@ -38,6 +38,8 @@ class Node:
                 self.send(node, message)
 
     def timeout(self, delay: float, message: Message):
+        if self in self.simulator.offline_nodes:
+            return
         arrival_time = self.simulator.time + delay
         event = Event(arrival_time, self, message, self, self)
         self.simulator.queue.append(event)
@@ -63,9 +65,12 @@ class Simulator:
         self.time = 0
         self.queue = []
         self.nodes = []
+        self.offline_nodes = set()
 
     def communicate(self, recipient: Node, message: Message, sender: Node, author: Node):
         # do not call directly from outside this module
+        if recipient in self.offline_nodes or sender in self.offline_nodes or author in self.offline_nodes:
+            return
         if IMPLICIT_ECHOING:
             sender.messages_seen.add(message)
         arrival_time = self.time + exponential(AVERAGE_DELAY)
@@ -105,10 +110,12 @@ class Simulator:
                     # unseen message from another node
                     recipient.messages_seen.add(message)
                     for node in self.nodes:
-                        if node != recipient and node != sender:
+                        if node != recipient and node != sender and sender not in self.offline_nodes and \
+                                author not in self.offline_nodes:
                             # echo from recipient with original author
                             self.communicate(node, message, recipient, author)
                 else:
-                    continue  # skip event handling
+                    # continue  # skip event handling
+                    pass
             # let node handle event
             recipient.receive(message, author)

@@ -12,8 +12,8 @@ SECOND = 6 * DELTA
 MINUTE = 30 * DELTA
 EPOCH_LEADER = {}
 # EPOCH_TIMER = 0
-TOTAL_NUMBER_OF_NODES = 10
-
+TOTAL_NUMBER_OF_NODES = 12
+OFFLINE_NODES = 0
 
 class Block:
     def __init__(self, parent: Block, epoch: int, seq: int):
@@ -76,10 +76,14 @@ class Sync(Message):
 
 
 class PipeletNode(Node):
-    def __init__(self, simulator: Simulator, ID: int):
+    def __init__(self, simulator: Simulator, ID: int, active: bool):
         super().__init__(simulator, ID)
         self.all_messages_received_count_for_finalization = 0
         self.all_messages_received_set = set()
+        self.unique_message_received_set = set()
+        self.all_messages_received_list = []
+        self.messages_send = set()
+        self.all_messages_send = []
 
         self.seq = -1
         self.EPOCH_TIMER = -1
@@ -93,12 +97,13 @@ class PipeletNode(Node):
         self.clock_message_count = {self.epoch + 1: 1}
         self.clock_message_set = {self.epoch + 1: set()}
         # to initiate the protocol Clock Message for next epoch added to event queue
-        self.timeout(MINUTE, Clock(self.epoch + 1))
+        if active:
+            self.timeout(MINUTE, Clock(self.epoch + 1))
 
     def initialize_vote_set(self):
         self.votes[GENESIS] = set()
-        for node in self.simulator.nodes:
-            self.votes[GENESIS].add(node)
+        for node_item in self.simulator.nodes:
+            self.votes[GENESIS].add(node_item)
 
     def update_clock_message_count(self, epoch: int):
         if len(self.clock_message_set[epoch]) >= 2 / 3 * len(self.simulator.nodes):
@@ -183,7 +188,7 @@ class PipeletNode(Node):
         if len(block_set) > 0:
             self.broadcast(Sync(block_set, temp_dict_for_votes))
             self.sync_block_set = self.longest_chain_set.union(self.sync_block_set)
-            logging.info(f"{self} broadcast SYNC message")
+            # logging.info(f"{self} broadcast SYNC message")
         if message.epoch > self.epoch:
             if self.epoch > 0:
                 self.clock_message_count[message.epoch] = 0
@@ -212,15 +217,16 @@ class PipeletNode(Node):
         global EPOCH_LEADER
         # logging.info(f" Event triggered - recipient: Node{self}, sender: Node{sender}, message: {message}")
         self.all_messages_received_set.add(message)
+        self.messages_send.add(message)
+        sender.all_messages_send.append(message)
         message_type = type(message)
         if message_type == NextEpoch:
             clock_message = Clock(self.epoch + 1)
             self.clock_logic(clock_message, self)
             self.broadcast(clock_message)
-            logging.info(f"{self} broadcast clock for epoch {self.epoch + 1}")
+            # logging.info(f"{self} broadcast clock for epoch {self.epoch + 1}")
             self.timeout(MINUTE, NextEpoch())
-            logging.info(f"reset NextEpoch for node {self.ID}")
-            # self.reset_next_epoch()
+            # logging.info(f"reset NextEpoch for node {self.ID}")
         elif message_type == Sync:
             previous_longest_notarized_block = self.longest_notarized()
             # will go away just for debugging
@@ -259,12 +265,11 @@ class PipeletNode(Node):
                 self.EPOCH_TIMER = 1
             block = Block(self.longest_notarized(), self.epoch, self.seq)
             self.seq += 1
-            # vote_count_for_parent_of_proposed_block = len(self.votes[block.parent])
 
             vote_count_for_parent_of_proposed_block = set()
             if block.parent is GENESIS:
-                for node in self.simulator.nodes:
-                    vote_count_for_parent_of_proposed_block.add(node)
+                for node_item in self.simulator.nodes:
+                    vote_count_for_parent_of_proposed_block.add(node_item)
             else:
                 vote_count_for_parent_of_proposed_block = self.votes[block.parent].union()
 
@@ -283,8 +288,6 @@ class PipeletNode(Node):
             # logging.info(f"{self} received proposed block {proposed_block}")
             self.votes[proposed_block.parent] = message.vote_count.union()
             # last block of the longest notarized chain
-            # previous_longest_block = self.longest_notarized()
-            # check logic again- written in half sleep
             if len(self.votes[proposed_block.parent]) >= 2 / 3 * len(self.simulator.nodes):
                 previous_longest_block = self.longest_notarized()
                 '''
@@ -311,11 +314,8 @@ class PipeletNode(Node):
                     # self.broadcast(message)
                     self.send(EPOCH_LEADER[self.epoch], message)
                     self.hasVoted.add(proposed_block)
-                    # i do not think we need to count proposer votes for proposer block notarization in here, they will
-                    # be done later automatically when Vote event happens self.count_vote(proposed_block, self)
-                    # logging.info(f"{self} votes on {proposed_block}")
                 else:
-                    oo = 1
+                    pass
                     # logging.info(f"{self} rejects {proposed_block}")
         elif message_type == Vote:
             # logging.info(f"{self} received Vote({message.block}) from {sender}")
@@ -330,15 +330,26 @@ if __name__ == "__main__":
     logging.info(f"start_time: {ct1}")
 
     simulator = Simulator()
+
     for i in range(TOTAL_NUMBER_OF_NODES):
-        simulator.nodes.append(PipeletNode(simulator, i))
+        if i < TOTAL_NUMBER_OF_NODES - OFFLINE_NODES:
+            simulator.nodes.append(PipeletNode(simulator, i, True))
+        else:
+            simulator.nodes.append(PipeletNode(simulator, i, False))
+            simulator.offline_nodes.add(simulator.nodes[i])
     simulator.run()
 
+    if len(simulator.offline_nodes) >= (2 / 3) * TOTAL_NUMBER_OF_NODES:
+        logging.info(f"exit: number of offline nodes greater then two-thirds total nodes")
+        exit()
+    simulator.run()
     for i in range(TOTAL_NUMBER_OF_NODES):
         node = simulator.nodes[i]
         logging.info(f" node {i}, num of blocks finalized:  {len(simulator.nodes[i].finalized)}, "
                      f"num of blocks notarized:  {len(simulator.nodes[i].notarized)}, "
-                     f"unique message count: {node.all_messages_received_count_for_finalization}")
+                     f"total message count: {node.all_messages_received_count_for_finalization},"
+                     f" total message send: {len(node.all_messages_send)}")
+
     now2 = datetime.now()
     ct2 = now2.strftime("%H:%M:%S")
     logging.info(f"end_time: {ct2}")
