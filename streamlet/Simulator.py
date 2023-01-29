@@ -40,6 +40,7 @@ class Node:
     def timeout(self, delay: float, message: Message):
         if self in self.simulator.offline_nodes:
             return
+        self.all_messages_send.append(message)
         arrival_time = self.simulator.time + delay
         event = Event(arrival_time, self, message, self, self)
         self.simulator.queue.append(event)
@@ -71,6 +72,7 @@ class Simulator:
         # do not call directly from outside this module
         if recipient in self.offline_nodes or sender in self.offline_nodes or author in self.offline_nodes:
             return
+        sender.all_messages_send.append(message)
         if IMPLICIT_ECHOING:
             sender.messages_seen.add(message)
         arrival_time = self.time + exponential(AVERAGE_DELAY)
@@ -116,5 +118,6 @@ class Simulator:
                 else:
                     # continue  # skip event handling
                     pass
+            sender.messages_send.append(message)
             # let node handle event
             recipient.receive(message, author)

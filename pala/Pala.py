@@ -11,7 +11,7 @@ from Simulator import *
 DELTA = 1
 SECOND = 6 * DELTA
 MINUTE = 30 * DELTA
-TOTAL_NUMBER_OF_NODES = 5
+TOTAL_NUMBER_OF_NODES = 15
 OFFLINE_NODES = 0
 
 
@@ -71,7 +71,7 @@ class PalaNode(Node):
         self.all_messages_received_count_for_finalization = 0
         self.unique_message_received_set = set()
         self.all_messages_received_list = []
-        self.messages_send = set()
+        self.messages_send = []
         self.all_messages_send = []
 
         self.seq = -1
@@ -201,8 +201,8 @@ class PalaNode(Node):
     def receive(self, message: Message, sender: Node):
         self.unique_message_received_set.add(message)
         self.all_messages_received_list.append(message)
-        self.messages_send.add(message)
-        sender.all_messages_send.append(message)
+        # self.messages_send.add(message)
+        # sender.all_messages_send.append(message)
         message_type = type(message)
         if message_type == NextEpoch:
             # self.me
@@ -285,13 +285,21 @@ if __name__ == "__main__":
         logging.info(f"exit: number of offline nodes greater then two-thirds total nodes")
         exit()
     simulator.run()
+    sum_message = 0
+    common_finalized_blocks = simulator.nodes[0].finalized
     for i in range(TOTAL_NUMBER_OF_NODES):
         node = simulator.nodes[i]
-        logging.info(f" node {i}, num of blocks finalized:  {len(simulator.nodes[i].finalized)}, "
-                     f"num of blocks notarized:  {len(simulator.nodes[i].notarized)}, "
-                     f"unique message count: {node.unique_message_received_count_for_finalization}, "
-                     f"total message count: {node.all_messages_received_count_for_finalization},"
-                     f" total message send: {len(node.all_messages_send)}")
+        sum_message = sum_message + len(node.all_messages_send)
+        common_finalized_blocks = common_finalized_blocks.intersection(node.finalized)
+        logging.info(f" node {i}, num of blocks finalized:  {len(node.finalized)}, "
+                     f"num of blocks notarized:  {len(node.notarized)}, "
+                     f"unique message rx. count: {node.unique_message_received_count_for_finalization}, "
+                     f"total message rx. count: {node.all_messages_received_count_for_finalization},"
+                     f" total message send: {len(node.all_messages_send)}, "
+                     f"==> total send message count from queue: {len(node.messages_send)} ")
+
+    logging.info(f"For N = {TOTAL_NUMBER_OF_NODES} ,total messages send: {sum_message}, "
+                 f"finalized blocks: {len(common_finalized_blocks)} ")
 
     now2 = datetime.now()
     ct2 = now2.strftime("%H:%M:%S")

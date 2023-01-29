@@ -10,8 +10,8 @@ logging.basicConfig(encoding='utf-8', level=logging.INFO, format=formatter)
 from Simulator import *
 
 EPOCH_LENGTH = 1
-TOTAL_NUMBER_OF_NODES = 5
-OFFLINE_NODES = 1
+TOTAL_NUMBER_OF_NODES = 3
+OFFLINE_NODES = 0
 
 
 class Block:
@@ -55,7 +55,7 @@ class StreamletNode(Node):
         self.all_messages_received_count_for_finalization = 0
         self.unique_message_received_set = set()
         self.all_messages_received_list = []
-        self.messages_send = set()
+        self.messages_send =[]
         self.all_messages_send = []
 
         self.last_un_notarized_block_length = 0
@@ -153,8 +153,6 @@ class StreamletNode(Node):
     def receive(self, message: Message, sender: Node):
         self.unique_message_received_set.add(message)
         self.all_messages_received_list.append(message)
-        self.messages_send.add(message)
-        sender.all_messages_send.append(message)
         message_type = type(message)
         if message_type == NextEpoch:
             self.epoch += 1
@@ -254,15 +252,22 @@ if __name__ == "__main__":
 
     simulator.run()
 
+    simulator.run()
+    sum_message = 0
+    common_finalized_blocks = simulator.nodes[0].finalized
     for i in range(TOTAL_NUMBER_OF_NODES):
         node = simulator.nodes[i]
-        # logging.info(f"node {i}, num of block notarized: {len(simulator.nodes[i].notarized)}")
+        sum_message = sum_message + len(node.all_messages_send)
+        common_finalized_blocks = common_finalized_blocks.intersection(node.finalized)
+        logging.info(f" node {i}, num of blocks finalized:  {len(node.finalized)}, "
+                     f"num of blocks notarized:  {len(node.notarized)}, "
+                     f"unique message rx. count: {node.unique_message_received_count_for_finalization}, "
+                     f"total message rx. count: {node.all_messages_received_count_for_finalization},"
+                     f" total message send: {len(node.all_messages_send)}, "
+                     f"==> total send message count from queue: {len(node.messages_send)} ")
 
-        logging.info(f" node {i}, num of blocks finalized:  {len(simulator.nodes[i].finalized)}, "
-                     f"num of blocks notarized:  {len(simulator.nodes[i].notarized)}, "
-                     f"unique message count: {node.unique_message_received_count_for_finalization}, "
-                     f"total message count: {node.all_messages_received_count_for_finalization},"
-                     f" total message send: {len(node.all_messages_send)}")
+    logging.info(f"For N = {TOTAL_NUMBER_OF_NODES} ,total messages send: {sum_message}, "
+                 f"finalized blocks: {len(common_finalized_blocks)} ")
 
     # f"total message send: {node.all_messages_send}",
     # f"unique message send: {node.messages_send}")
