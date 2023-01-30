@@ -10,7 +10,7 @@ logging.basicConfig(encoding='utf-8', level=logging.INFO, format=formatter)
 from Simulator import *
 
 EPOCH_LENGTH = 1
-TOTAL_NUMBER_OF_NODES = 5
+TOTAL_NUMBER_OF_NODES = 3
 OFFLINE_NODES = 0
 
 
@@ -178,6 +178,9 @@ class StreamletNode(Node):
             # last block of some longest notarized chain
             longest_block = self.longest_notarized()
             self.PROPOSED_BLOCK_RECEIVED.add(proposed_block)
+            # logging.info(f"{self} receives on {proposed_block}")
+            if proposed_block in self.votes:
+                self.count_vote(proposed_block)
             condition_1 = proposed_block.epoch == self.epoch
             condition_2 = sender.is_leader(self.epoch)
             condition_3 = proposed_block.epoch not in self.hasVoted
@@ -186,11 +189,11 @@ class StreamletNode(Node):
             condition_6 = 0 == len(self.un_notarized_list)
             if condition_1 and condition_2 and condition_3 and condition_4 and condition_5 and condition_6:
                 message = Vote(proposed_block)
+                # logging.info(f"{self} votes on {proposed_block}")
                 self.add_votes(proposed_block, self)
                 self.count_vote(proposed_block)
                 self.broadcast(message)
                 self.hasVoted.add(proposed_block.epoch)
-                # logging.info(f"{self} votes on {proposed_block}")
             else:
                 '''
                 #debug purpose
