@@ -10,7 +10,7 @@ logging.basicConfig(encoding='utf-8', level=logging.INFO, format=formatter)
 from Simulator import *
 
 EPOCH_LENGTH = 1
-TOTAL_NUMBER_OF_NODES = 3
+TOTAL_NUMBER_OF_NODES = 5
 OFFLINE_NODES = 0
 
 
@@ -252,7 +252,6 @@ if __name__ == "__main__":
 
     simulator.run()
 
-    simulator.run()
     sum_message = 0
     common_finalized_blocks = simulator.nodes[0].finalized
     for i in range(TOTAL_NUMBER_OF_NODES):
