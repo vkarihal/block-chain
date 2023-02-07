@@ -10,13 +10,15 @@ logging.basicConfig(encoding='utf-8', level=logging.INFO, format=formatter)
 from Simulator import *
 
 EPOCH_LENGTH = 1
-TOTAL_NUMBER_OF_NODES = 3
+TOTAL_NUMBER_OF_NODES = 4
 OFFLINE_NODES = 0
 
 
 class Block:
     def __init__(self, parent: Block, epoch: int):
         self.parent = parent
+        if parent is not None:
+            self.parent.child = self
         self.epoch = epoch
         if parent is None:  # genesis
             self.length = 0
